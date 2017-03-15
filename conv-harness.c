@@ -34,6 +34,7 @@
 #include <assert.h>
 #include <omp.h>
 #include <math.h>
+#include <x86intrin.h>
 
 /* the following two definitions of DEBUGGING control whether or not
    debugging information is written out. To put the program into
