@@ -228,10 +228,22 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int width, int height, int nchannels, int nkernels,
                int kernel_order)
 {
-  // this call here is just dummy code
-  // insert your own code instead
-  multichannel_conv(image, kernels, output, width,
-                    height, nchannels, nkernels, kernel_order);
+  int h, w, x, y, c, m;
+  for ( m = 0; m < nkernels; m++ ) {
+    for ( w = 0; w < width; w++ ) {
+      for ( h = 0; h < height; h++ ) {
+        double sum = 0.0;
+        for ( c = 0; c < nchannels; c++ ) {
+          for ( x = 0; x < kernel_order; x++) {
+            for ( y = 0; y < kernel_order; y++ ) {
+              sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+            }
+          }
+        }
+        output[m][w][h] = sum;
+      }
+    }
+  }
 }
 
 int main(int argc, char ** argv)
@@ -244,8 +256,12 @@ float *** image, **** kernels, *** output;
   float *** control_output;
   long long mul_time;
   int width, height, kernel_order, nchannels, nkernels;
-  struct timeval start_time;
-  struct timeval stop_time;
+  struct timeval start_time1;
+  struct timeval stop_time1;
+  //Added variables for timer
+  long long mul_time1, mul_time2;
+  struct timeval start_time2;
+  struct timeval stop_time2;
 
   if ( argc != 6 ) {
     fprintf(stderr, "Usage: conv-harness <image_width> <image_height> <kernel_order> <number of channels> <number of kernels>\n");
@@ -278,22 +294,26 @@ float *** image, **** kernels, *** output;
 
   //DEBUGGING(write_out(A, a_dim1, a_dim2));
 
+  gettimeofday(&start_time1, NULL);
   /* use a simple multichannel convolution routine to produce control result */
   multichannel_conv(image, kernels, control_output, width,
                     height, nchannels, nkernels, kernel_order);
+  gettimeofday(&stop_time1, NULL);
 
   /* record starting time of team's code*/
-  gettimeofday(&start_time, NULL);
+  gettimeofday(&start_time2, NULL);
 
   /* perform student team's multichannel convolution */
   team_conv(image, kernels, output, width,
                     height, nchannels, nkernels, kernel_order);
 
   /* record finishing time */
-  gettimeofday(&stop_time, NULL);
-  mul_time = (stop_time.tv_sec - start_time.tv_sec) * 1000000L +
-    (stop_time.tv_usec - start_time.tv_usec);
-  printf("Team conv time: %lld microseconds\n", mul_time);
+  gettimeofday(&stop_time2, NULL);
+  mul_time1 = (stop_time1.tv_sec - start_time1.tv_sec) * 1000000L +
+    (stop_time1.tv_usec - start_time1.tv_usec);
+  mul_time2 = (stop_time2.tv_sec - start_time2.tv_sec) * 1000000L +
+    (stop_time2.tv_usec - start_time2.tv_usec);
+  printf("     Dave time: %lld microseconds  Team conv time: %lld microseconds\n", mul_time1, mul_time2);
 
   DEBUGGING(write_out(output, nkernels, width, height));
 
