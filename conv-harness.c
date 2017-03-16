@@ -121,9 +121,9 @@ float **** copy_4d_matrix(float **** source_matrix, int dim0,
 /* create a matrix and fill it with random numbers */
 float **** gen_random_4d_matrix(int dim0, int dim1, int dim2, int dim3)
 {
-float **** result;
-int i, j, k, l;
-struct timeval seedtime;
+  float **** result;
+  int i, j, k, l;
+  struct timeval seedtime;
   int seed;
 
   result = new_empty_4d_matrix(dim0, dim1, dim2, dim3);
@@ -252,7 +252,7 @@ int main(int argc, char ** argv)
   //float kernels[M][C][K][K];
   //float output[M][W][H];
   
-float *** image, **** kernels, *** output;
+  float *** image, **** kernels, *** output;
   float *** control_output;
   long long mul_time;
   int width, height, kernel_order, nchannels, nkernels;
