@@ -1,30 +1,23 @@
 /* Test and timing harness program for developing a multichannel
    multikernel convolution (as used in deep learning networks)
-
    Note there are some simplifications around this implementation,
    in particular with respect to computing the convolution at edge
    pixels of the image.
-
    Author: David Gregg
    Date:   February 2017
-
-
    Version 1.4 : Modified the random generator to reduce the range
                  of generated values;
                  Changed the summation in the checking code from
                  float to double to try to bring the checked value
                  closer to the "true" value
-
    Version 1.3 : Fixed which loop variables were being incremented
                  in write_out();
                  Fixed dimensions of output and control_output 
                  matrices in main function
-
    Version 1.2 : Changed distribution of test data to (hopefully) 
                  eliminate random walk of floating point error;
                  Also introduced checks to restrict kernel-order to
                  a small set of values
-
    Version 1.1 : Fixed bug in code to create 4d matrix
 */
 
@@ -230,31 +223,58 @@ void team_conv(float *** image, float **** kernels, float *** output,
 {
   int h, w, x, y, c, m;
 
-  for ( m = 0; m < nkernels; m++ ) {
-    for ( w = 0; w < width; w++ ) {
-      for ( h = 0; h < height; h++ ) {
-        double sum = 0.0;
-        for ( c = 0; c < nchannels; c++ ) {
-            if(kernel_order==1){
+  switch(kernel_order){
+    case 1:
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
               sum += image[w][h][c] * kernels[m][c][0][0];
-            }
-            else{
-              if(kernel_order==3){
-                sum += (image[w][h][c] * kernels[m][c][0][0]) + (image[w][h+1][c] * kernels[m][c][0][1]) + (image[w][h+2][c] * kernels[m][c][0][2]) + (image[w+1][h][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+2][h][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]);
-              }
-              else {
-                if(kernel_order==5){
-                  sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]);
-                }
-                else{
-                  sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+0][h+5][c] * kernels[m][c][0][5]) + (image[w+0][h+6][c] * kernels[m][c][0][6]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+1][h+5][c] * kernels[m][c][1][5]) + (image[w+1][h+6][c] * kernels[m][c][1][6]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+2][h+5][c] * kernels[m][c][2][5]) + (image[w+2][h+6][c] * kernels[m][c][2][6]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+3][h+5][c] * kernels[m][c][3][5]) + (image[w+3][h+6][c] * kernels[m][c][3][6]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]) + (image[w+4][h+5][c] * kernels[m][c][4][5]) + (image[w+4][h+6][c] * kernels[m][c][4][6]) + (image[w+5][h+0][c] * kernels[m][c][5][0]) + (image[w+5][h+1][c] * kernels[m][c][5][1]) + (image[w+5][h+2][c] * kernels[m][c][5][2]) + (image[w+5][h+3][c] * kernels[m][c][5][3]) + (image[w+5][h+4][c] * kernels[m][c][5][4]) + (image[w+5][h+5][c] * kernels[m][c][5][5]) + (image[w+5][h+6][c] * kernels[m][c][5][6]) + (image[w+6][h+0][c] * kernels[m][c][6][0]) + (image[w+6][h+1][c] * kernels[m][c][6][1]) + (image[w+6][h+2][c] * kernels[m][c][6][2]) + (image[w+6][h+3][c] * kernels[m][c][6][3]) + (image[w+6][h+4][c] * kernels[m][c][6][4]) + (image[w+6][h+5][c] * kernels[m][c][6][5]) + (image[w+6][h+6][c] * kernels[m][c][6][6]);
-                }
-              }
-            }
-          output[m][w][h] = sum;
+            }   
+            output[m][w][h] = sum;
+          }
         }
       }
-    }
+      break;
+    case 3:
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
+              sum += (image[w][h][c] * kernels[m][c][0][0]) + (image[w][h+1][c] * kernels[m][c][0][1]) + (image[w][h+2][c] * kernels[m][c][0][2]) + (image[w+1][h][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+2][h][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]);
+            }   
+            output[m][w][h] = sum;
+          }
+        }
+      }
+      break;
+    case 5:
+        for ( m = 0; m < nkernels; m++ ) {
+          for ( w = 0; w < width; w++ ) {
+            for ( h = 0; h < height; h++ ) {
+              double sum = 0.0;
+              for ( c = 0; c < nchannels; c++ ) {
+                sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]);
+              }   
+              output[m][w][h] = sum;
+            }
+          }
+        }
+      break;
+    case 7:
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
+              sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+0][h+5][c] * kernels[m][c][0][5]) + (image[w+0][h+6][c] * kernels[m][c][0][6]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+1][h+5][c] * kernels[m][c][1][5]) + (image[w+1][h+6][c] * kernels[m][c][1][6]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+2][h+5][c] * kernels[m][c][2][5]) + (image[w+2][h+6][c] * kernels[m][c][2][6]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+3][h+5][c] * kernels[m][c][3][5]) + (image[w+3][h+6][c] * kernels[m][c][3][6]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]) + (image[w+4][h+5][c] * kernels[m][c][4][5]) + (image[w+4][h+6][c] * kernels[m][c][4][6]) + (image[w+5][h+0][c] * kernels[m][c][5][0]) + (image[w+5][h+1][c] * kernels[m][c][5][1]) + (image[w+5][h+2][c] * kernels[m][c][5][2]) + (image[w+5][h+3][c] * kernels[m][c][5][3]) + (image[w+5][h+4][c] * kernels[m][c][5][4]) + (image[w+5][h+5][c] * kernels[m][c][5][5]) + (image[w+5][h+6][c] * kernels[m][c][5][6]) + (image[w+6][h+0][c] * kernels[m][c][6][0]) + (image[w+6][h+1][c] * kernels[m][c][6][1]) + (image[w+6][h+2][c] * kernels[m][c][6][2]) + (image[w+6][h+3][c] * kernels[m][c][6][3]) + (image[w+6][h+4][c] * kernels[m][c][6][4]) + (image[w+6][h+5][c] * kernels[m][c][6][5]) + (image[w+6][h+6][c] * kernels[m][c][6][6]);
+            }   
+            output[m][w][h] = sum;
+          }
+        }
+      }
   }
 }
 
@@ -304,10 +324,12 @@ int main(int argc, char ** argv)
 
   //DEBUGGING(write_out(A, a_dim1, a_dim2));
 
+  /* record starting time of Dave's code*/
   gettimeofday(&start_time1, NULL);
   /* use a simple multichannel convolution routine to produce control result */
   multichannel_conv(image, kernels, control_output, width,
                     height, nchannels, nkernels, kernel_order);
+  /* record finishing time */
   gettimeofday(&stop_time1, NULL);
 
   /* record starting time of team's code*/
