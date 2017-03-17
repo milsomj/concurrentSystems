@@ -230,24 +230,32 @@ void team_conv(float *** image, float **** kernels, float *** output,
 {
   int h, w, x, y, c, m;
 	if(kernel_order == 1){
+    printf("%s\n", "OKAY");
 		for ( m = 0; m < nkernels; m++ ) {
 		  for ( w = 0; w < width; w++ ) {
 		    for ( h = 0; h < height; h++ ) {
-		      float sum = 0.0;
+		      float sum;
+          float temp[] = {0.0,0.0,0.0,0.0};
+          __m128 sum4 = _mm_loadu_ps(&temp[0]);
+          __m128 a4;
+          __m128 b4;
+          __m128 c4;
 		      for ( c = 0; c < nchannels-3; c+=4 ) {
-		          __m128 a4 = _mm_load_ps(&image[w][h][c]);
-              __m128 b4 = _mm_load_ps(&kernels[m][c][0][0]);
-              __m128 c4 = _mm_mul_ps(a4,b4);
-              float * temp = malloc(4*sizeof(float));
-              _mm_store_ps(temp,c4);
-              sum += temp[0] + temp[1] + temp[2] + temp[3];
+		          a4 = _mm_loadu_ps(&image[w][h][c]);
+              b4 = _mm_loadu_ps(&kernels[m][c][0][0]);
+              c4 = _mm_mul_ps(a4,b4);
+              sum4 = _mm_add_ps(sum4,c4);
+              //_mm_storeu_ps(&temp[c],c4);
 		      }
+          _mm_storeu_ps(&temp[0],sum4);
+          sum = temp[0] + temp[1] + temp[2] + temp[3];
 					output[m][w][h] = sum;
 		    }
 		  }
 		}
 	}
 	else{
+    printf("%s\n", "NOT OKAY");
 		for ( m = 0; m < nkernels; m++ ) {
 		  for ( w = 0; w < width; w++ ) {
 		    for ( h = 0; h < height; h++ ) {
