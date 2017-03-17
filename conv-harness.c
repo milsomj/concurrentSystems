@@ -1,30 +1,23 @@
 /* Test and timing harness program for developing a multichannel
    multikernel convolution (as used in deep learning networks)
-
    Note there are some simplifications around this implementation,
    in particular with respect to computing the convolution at edge
    pixels of the image.
-
    Author: David Gregg
    Date:   February 2017
-
-
    Version 1.4 : Modified the random generator to reduce the range
                  of generated values;
                  Changed the summation in the checking code from
                  float to double to try to bring the checked value
                  closer to the "true" value
-
    Version 1.3 : Fixed which loop variables were being incremented
                  in write_out();
-                 Fixed dimensions of output and control_output
+                 Fixed dimensions of output and control_output 
                  matrices in main function
-
-   Version 1.2 : Changed distribution of test data to (hopefully)
+   Version 1.2 : Changed distribution of test data to (hopefully) 
                  eliminate random walk of floating point error;
                  Also introduced checks to restrict kernel-order to
                  a small set of values
-
    Version 1.1 : Fixed bug in code to create 4d matrix
 */
 
@@ -71,7 +64,7 @@ float **** new_empty_4d_matrix(int dim0, int dim1, int dim2, int dim3)
   float * mat3 = malloc(dim0 * dim1 * dim2 *dim3 * sizeof(float));
   int i, j, k;
 
-
+  
   for ( i = 0; i < dim0; i++ ) {
     result[i] = &(mat1[i*dim1]);
     for ( j = 0; j < dim1; j++ ) {
@@ -172,14 +165,14 @@ float *** gen_random_3d_matrix(int dim0, int dim1, int dim2)
 
 /* check the sum of absolute differences is within reasonable epsilon */
 void check_result(float *** result, float *** control,
-                  int dim0, int dim1, int dim2)
+                  int dim0, int dim1, int dim2, int n)
 {
   int i, j, k;
   double sum_abs_diff = 0.0;
   const double EPSILON = 0.0625;
 
   //printf("SAD\n");
-
+  
   for ( i = 0; i < dim0; i++ ) {
     for ( j = 0; j < dim1; j++ ) {
       for ( k = 0; k < dim2; k++ ) {
@@ -194,7 +187,7 @@ void check_result(float *** result, float *** control,
     fprintf(stderr, "WARNING: sum of absolute differences (%f) > EPSILON (%f)\n",
             sum_abs_diff, EPSILON);
   }
-  else {
+  else if(sum_abs_diff > 0 && n == 1){
     printf("COMMENT: sum of absolute differences (%f)  within acceptable range (%f)\n", sum_abs_diff, EPSILON);
   }
 }
@@ -228,42 +221,80 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int width, int height, int nchannels, int nkernels,
                int kernel_order)
 {
-  int h, w, x, y, c, m;
-	if(kernel_order == 1){
-		for ( m = 0; m < nkernels; m++ ) {
-		  for ( w = 0; w < width; w++ ) {
-		    for ( h = 0; h < height; h++ ) {
-		      float sum = 0.0;
-		      for ( c = 0; c < nchannels-3; c+=4 ) {
-		          __m128 a4 = _mm_load_ps(&image[w][h][c]);
-              __m128 b4 = _mm_load_ps(&kernels[m][c][0][0]);
-              __m128 c4 = _mm_mul_ps(a4,b4);
-              float * temp = malloc(4*sizeof(float));
-              _mm_store_ps(temp,c4);
-              sum += temp[0] + temp[1] + temp[2] + temp[3];
-		      }
-					output[m][w][h] = sum;
-		    }
-		  }
-		}
-	}
-	else{
-		for ( m = 0; m < nkernels; m++ ) {
-		  for ( w = 0; w < width; w++ ) {
-		    for ( h = 0; h < height; h++ ) {
-		      double sum = 0.0;
-		      for ( c = 0; c < nchannels; c++ ) {
-		        for ( x = 0; x < kernel_order; x++) {
-		          for ( y = 0; y < kernel_order; y++ ) {
-		            sum += image[w+x][h+y][c] * kernels[m][c][x][y];
-		          }
-		        }
-		      }
-					output[m][w][h] = sum;
-		    }
-		  }
-		}
-	}
+  int h, w, x, y, c, m, tid, nthreads;
+
+  switch(kernel_order){
+    case 1:
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
+              sum += image[w][h][c] * kernels[m][c][0][0];
+            }   
+            output[m][w][h] = sum;
+          }
+        }
+      }
+      break;
+    case 3:
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
+              sum += (image[w][h][c] * kernels[m][c][0][0]) + (image[w][h+1][c] * kernels[m][c][0][1]) + (image[w][h+2][c] * kernels[m][c][0][2]) + (image[w+1][h][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+2][h][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]);
+            }   
+            output[m][w][h] = sum;
+          }
+        }
+      }
+      break;
+    case 5:
+        //printf("Status of nested parallelism is %d\n", omp_get_nested());
+        omp_set_nested(1);
+        //printf("Status of nested parallelism is %d\n", omp_get_nested());
+        #pragma omp parallel for private(tid, nthreads, h,c,x,y) //collapse()
+        for ( m = 0; m < nkernels; m++ ) {
+          /*printf("starting thread = %d on matrix = %d\n", tid, m);
+          if (tid = 0) 
+             {
+               nthreads = omp_get_num_threads();
+               printf("Number of threads = %d\n", nthreads);
+             }*/
+          for ( w = 0; w < width; w++ ) {
+            //#pragma omp parallel for private(sum)
+            for ( h = 0; h < height; h++ ) {
+              double sum = 0.0;
+              //printf("on h = %d out of %d w = %d out of %d  m = %d out of %d\n", h,height,w,width,m,nkernels);
+              //#pragma omp parallel for lastprivate(sum)
+              for ( c = 0; c < nchannels; c++ ) {
+                for ( x = 0; x < kernel_order; x++) {
+                  for ( y = 0; y < kernel_order; y++ ) {
+                    sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+                  }
+                }
+              }
+              output[m][w][h] = sum;
+            }
+          }
+          //printf("ending thread = %d for matrix = %d\n", tid, m);
+        }
+      break;
+    case 7:
+      //#pragma omp parallel for num_threads(nkernels)
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum = 0.0;
+            for ( c = 0; c < nchannels; c++ ) {
+              sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+0][h+5][c] * kernels[m][c][0][5]) + (image[w+0][h+6][c] * kernels[m][c][0][6]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+1][h+5][c] * kernels[m][c][1][5]) + (image[w+1][h+6][c] * kernels[m][c][1][6]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+2][h+5][c] * kernels[m][c][2][5]) + (image[w+2][h+6][c] * kernels[m][c][2][6]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+3][h+5][c] * kernels[m][c][3][5]) + (image[w+3][h+6][c] * kernels[m][c][3][6]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]) + (image[w+4][h+5][c] * kernels[m][c][4][5]) + (image[w+4][h+6][c] * kernels[m][c][4][6]) + (image[w+5][h+0][c] * kernels[m][c][5][0]) + (image[w+5][h+1][c] * kernels[m][c][5][1]) + (image[w+5][h+2][c] * kernels[m][c][5][2]) + (image[w+5][h+3][c] * kernels[m][c][5][3]) + (image[w+5][h+4][c] * kernels[m][c][5][4]) + (image[w+5][h+5][c] * kernels[m][c][5][5]) + (image[w+5][h+6][c] * kernels[m][c][5][6]) + (image[w+6][h+0][c] * kernels[m][c][6][0]) + (image[w+6][h+1][c] * kernels[m][c][6][1]) + (image[w+6][h+2][c] * kernels[m][c][6][2]) + (image[w+6][h+3][c] * kernels[m][c][6][3]) + (image[w+6][h+4][c] * kernels[m][c][6][4]) + (image[w+6][h+5][c] * kernels[m][c][6][5]) + (image[w+6][h+6][c] * kernels[m][c][6][6]);
+            }   
+            output[m][w][h] = sum;
+          }
+        }
+      }
+  }
 }
 
 int main(int argc, char ** argv)
@@ -271,27 +302,28 @@ int main(int argc, char ** argv)
   //float image[W][H][C];
   //float kernels[M][C][K][K];
   //float output[M][W][H];
-
+  
   float *** image, **** kernels, *** output;
   float *** control_output;
-  long long mul_time1, mul_time2;
   int width, height, kernel_order, nchannels, nkernels;
   struct timeval start_time1;
   struct timeval stop_time1;
+  //Added variables for timer
+  long long mul_time1, mul_time2, diff;
   struct timeval start_time2;
   struct timeval stop_time2;
 
-  if ( argc != 6 ) {
-    fprintf(stderr, "Usage: conv-harness <image_width> <image_height> <kernel_order> <number of channels> <number of kernels>\n");
+  if ( argc != 5 ) {
+    fprintf(stderr, "Usage: conv-harness <image_width> <image_height> (no kernel_order) <number of channels> <number of kernels>\n");
     exit(1);
   }
   else {
     width = atoi(argv[1]);
     height = atoi(argv[2]);
-    kernel_order = atoi(argv[3]);
-    nchannels = atoi(argv[4]);
-    nkernels = atoi(argv[5]);
-  }
+    //kernel_order = atoi(argv[3]);
+    nchannels = atoi(argv[3]);
+    nkernels = atoi(argv[4]);
+  }/*
   switch ( kernel_order ) {
   case 1:
   case 3:
@@ -301,43 +333,56 @@ int main(int argc, char ** argv)
     fprintf(stderr, "FATAL: kernel_order must be 1, 3, 5 or 7, not %d\n",
             kernel_order);
     exit(1);
-  }
+  }*/
 
   /* allocate the matrices */
-  image = gen_random_3d_matrix(width+kernel_order, height + kernel_order,
-                               nchannels);
-  kernels = gen_random_4d_matrix(nkernels, nchannels, kernel_order, kernel_order);
-  output = new_empty_3d_matrix(nkernels, width, height);
-  control_output = new_empty_3d_matrix(nkernels, width, height);
 
-  //DEBUGGING(write_out(A, a_dim1, a_dim2));
+  int n = 1;
+  for(int i = 1; i <= 7; i+=2){
+    kernel_order = i;
+    printf("case %d:\n", i);
+    mul_time1 = 0;
+    mul_time2 = 0;
 
-  gettimeofday(&start_time1, NULL);
-  /* use a simple multichannel convolution routine to produce control result */
-  multichannel_conv(image, kernels, control_output, width,
-                    height, nchannels, nkernels, kernel_order);
-  gettimeofday(&stop_time1, NULL);
+    for(int j = 0; j < n; j++){
+      image = gen_random_3d_matrix(width+kernel_order, height + kernel_order,
+                                   nchannels);
+      kernels = gen_random_4d_matrix(nkernels, nchannels, kernel_order, kernel_order);
+      output = new_empty_3d_matrix(nkernels, width, height);
+      control_output = new_empty_3d_matrix(nkernels, width, height);
 
-  /* record starting time of team's code*/
-  gettimeofday(&start_time2, NULL);
+      //DEBUGGING(write_out(A, a_dim1, a_dim2));
 
-  /* perform student team's multichannel convolution */
-  team_conv(image, kernels, output, width,
-                    height, nchannels, nkernels, kernel_order);
+      gettimeofday(&start_time1, NULL);
+      /* use a simple multichannel convolution routine to produce control result */
+      multichannel_conv(image, kernels, control_output, width,
+                        height, nchannels, nkernels, kernel_order);
+      gettimeofday(&stop_time1, NULL);
 
-  /* record finishing time */
-  gettimeofday(&stop_time2, NULL);
-  mul_time1 = (stop_time1.tv_sec - start_time1.tv_sec) * 1000000L +
-    (stop_time1.tv_usec - start_time1.tv_usec);
-  mul_time2 = (stop_time2.tv_sec - start_time2.tv_sec) * 1000000L +
-    (stop_time2.tv_usec - start_time2.tv_usec);
-  printf("     Dave time: %lld microseconds  Team conv time: %lld microseconds\n", mul_time1, mul_time2);
+      /* record starting time of team's code*/
+      gettimeofday(&start_time2, NULL);
 
-  DEBUGGING(write_out(output, nkernels, width, height));
+      /* perform student team's multichannel convolution */
+      team_conv(image, kernels, output, width,
+                        height, nchannels, nkernels, kernel_order);
 
-  /* now check that the team's multichannel convolution routine
-     gives the same answer as the known working version */
-  check_result(output, control_output, nkernels, width, height);
+      /* record finishing time */
+      gettimeofday(&stop_time2, NULL);
+      mul_time1 += (stop_time1.tv_sec - start_time1.tv_sec) * 1000000L +
+        (stop_time1.tv_usec - start_time1.tv_usec);
+      mul_time2 += (stop_time2.tv_sec - start_time2.tv_sec) * 1000000L +
+        (stop_time2.tv_usec - start_time2.tv_usec);
+      DEBUGGING(write_out(output, nkernels, width, height));
 
+      /* now check that the team's multichannel convolution routine
+         gives the same answer as the known working version */
+      check_result(output, control_output, nkernels, width, height, n);
+    }
+    mul_time1 /= n;
+    mul_time2 /= n;
+    diff = mul_time1 / mul_time2; 
+    printf("     Dave avg time: %lld microseconds  Team avg conv time: %lld microseconds\n", mul_time1, mul_time2);
+    printf("       Improvement factor: %lld\n", diff);
+  }
   return 0;
 }
