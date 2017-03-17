@@ -17,10 +17,10 @@
 
    Version 1.3 : Fixed which loop variables were being incremented
                  in write_out();
-                 Fixed dimensions of output and control_output 
+                 Fixed dimensions of output and control_output
                  matrices in main function
 
-   Version 1.2 : Changed distribution of test data to (hopefully) 
+   Version 1.2 : Changed distribution of test data to (hopefully)
                  eliminate random walk of floating point error;
                  Also introduced checks to restrict kernel-order to
                  a small set of values
@@ -71,7 +71,7 @@ float **** new_empty_4d_matrix(int dim0, int dim1, int dim2, int dim3)
   float * mat3 = malloc(dim0 * dim1 * dim2 *dim3 * sizeof(float));
   int i, j, k;
 
-  
+
   for ( i = 0; i < dim0; i++ ) {
     result[i] = &(mat1[i*dim1]);
     for ( j = 0; j < dim1; j++ ) {
@@ -124,36 +124,36 @@ float **** gen_random_4d_matrix(int dim0, int dim1, int dim2, int dim3)
   float **** result;
   int i, j, k, l;
   struct timeval seedtime;
-  int seed;
+    int seed;
 
-  result = new_empty_4d_matrix(dim0, dim1, dim2, dim3);
+    result = new_empty_4d_matrix(dim0, dim1, dim2, dim3);
 
-  /* use the microsecond part of the current time as a pseudorandom seed */
-  gettimeofday(&seedtime, NULL);
-  seed = seedtime.tv_usec;
-  srandom(seed);
+    /* use the microsecond part of the current time as a pseudorandom seed */
+    gettimeofday(&seedtime, NULL);
+    seed = seedtime.tv_usec;
+    srandom(seed);
 
-  /* fill the matrix with random numbers */
-  const int range = 1 << 12; // 2^12
-  const int bias = 1 << 16; // 2^16
-  float offset = 0.0;
-  for ( i = 0; i < dim0; i++ ) {
-    for ( j = 0; j < dim1; j++ ) {
-      for ( k = 0; k < dim2; k++ ) {
-        for ( l = 0; l < dim3; l++ ) {
-          // generate uniform random integer with mean of zero
-          long long rand = random();
-          // now cut down the range and bias the mean to reduce
-          // the likelihood of large floating point round-off errors
-          int reduced_range = (rand % range);
-          float num = (((float) reduced_range) / ((float) bias))+offset;
-          result[i][j][k][l] = num;
+    /* fill the matrix with random numbers */
+    const int range = 1 << 12; // 2^12
+    const int bias = 1 << 16; // 2^16
+    float offset = 0.0;
+    for ( i = 0; i < dim0; i++ ) {
+      for ( j = 0; j < dim1; j++ ) {
+        for ( k = 0; k < dim2; k++ ) {
+          for ( l = 0; l < dim3; l++ ) {
+            // generate uniform random integer with mean of zero
+            long long rand = random();
+            // now cut down the range and bias the mean to reduce
+            // the likelihood of large floating point round-off errors
+            int reduced_range = (rand % range);
+            float num = (((float) reduced_range) / ((float) bias))+offset;
+            result[i][j][k][l] = num;
+          }
         }
       }
     }
-  }
 
-  return result;
+    return result;
 }
 
 /* create a matrix and fill it with random numbers */
@@ -179,7 +179,7 @@ void check_result(float *** result, float *** control,
   const double EPSILON = 0.0625;
 
   //printf("SAD\n");
-  
+
   for ( i = 0; i < dim0; i++ ) {
     for ( j = 0; j < dim1; j++ ) {
       for ( k = 0; k < dim2; k++ ) {
@@ -229,21 +229,41 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int kernel_order)
 {
   int h, w, x, y, c, m;
-  for ( m = 0; m < nkernels; m++ ) {
-    for ( w = 0; w < width; w++ ) {
-      for ( h = 0; h < height; h++ ) {
-        double sum = 0.0;
-        for ( c = 0; c < nchannels; c++ ) {
-          for ( x = 0; x < kernel_order; x++) {
-            for ( y = 0; y < kernel_order; y++ ) {
-              sum += image[w+x][h+y][c] * kernels[m][c][x][y];
-            }
-          }
-        }
-        output[m][w][h] = sum;
-      }
-    }
-  }
+	if(kernel_order == 1){
+		for ( m = 0; m < nkernels; m++ ) {
+		  for ( w = 0; w < width; w++ ) {
+		    for ( h = 0; h < height; h++ ) {
+		      float sum = 0.0;
+		      for ( c = 0; c < nchannels-3; c+=4 ) {
+		          __m128 a4 = _mm_load_ps(&image[w][h][c]);
+              __m128 b4 = _mm_load_ps(&kernels[m][c][0][0]);
+              __m128 c4 = _mm_mul_ps(a4,b4);
+              float * temp = malloc(4*sizeof(float));
+              _mm_store_ps(temp,c4);
+              sum += temp[0] + temp[1] + temp[2] + temp[3];
+		      }
+					output[m][w][h] = sum;
+		    }
+		  }
+		}
+	}
+	else{
+		for ( m = 0; m < nkernels; m++ ) {
+		  for ( w = 0; w < width; w++ ) {
+		    for ( h = 0; h < height; h++ ) {
+		      double sum = 0.0;
+		      for ( c = 0; c < nchannels; c++ ) {
+		        for ( x = 0; x < kernel_order; x++) {
+		          for ( y = 0; y < kernel_order; y++ ) {
+		            sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+		          }
+		        }
+		      }
+					output[m][w][h] = sum;
+		    }
+		  }
+		}
+	}
 }
 
 int main(int argc, char ** argv)
@@ -251,15 +271,13 @@ int main(int argc, char ** argv)
   //float image[W][H][C];
   //float kernels[M][C][K][K];
   //float output[M][W][H];
-  
+
   float *** image, **** kernels, *** output;
   float *** control_output;
-  long long mul_time;
+  long long mul_time1, mul_time2;
   int width, height, kernel_order, nchannels, nkernels;
   struct timeval start_time1;
   struct timeval stop_time1;
-  //Added variables for timer
-  long long mul_time1, mul_time2;
   struct timeval start_time2;
   struct timeval stop_time2;
 
