@@ -228,26 +228,36 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int width, int height, int nchannels, int nkernels,
                int kernel_order)
 {
-  int h, w, x, y, c, m;
+  int h, w, x, y, c, m, i;
+  float sum = 0;
+  __m128 a4;
+  __m128 b4;
+  __m128 c4;
+  __m128 sum4;
+  float * temp = malloc(4*sizeof(float));
 	if(kernel_order == 1){
-    __m128 a4;
-    __m128 b4;
-    __m128 c4;
-    __m128 sum4;
-    float * temp = malloc(4*sizeof(float));
-    #pragma omp parallel for private(m,w,h,c,sum4,a4,b4,c4,sum,temp,output) collapse(4) //Need to revise the private variables
+    
+    
+    // #pragma omp parallel for private(m,w,h,c,sum4,a4,b4,c4,temp,sum,output) collapse(3) //Need to revise the private variables
 		for ( m = 0; m < nkernels; m++ ) {
 		  for ( w = 0; w < width; w++ ) {
+
 		    for ( h = 0; h < height; h++ ) {
           sum4 = _mm_setzero_ps();
+          //#pragma omp parallel for private(a4,b4,c4,sum4,c)
 		      for ( c = 0; c < nchannels-3; c+=4 ) {
-		          a4 = _mm_load_ps(&image[w][h][c]);
-              b4 = _mm_load_ps(&kernels[m][c][0][0]);
+		          a4 = _mm_loadu_ps(&image[w][h][c]);
+              b4 = _mm_loadu_ps(&kernels[m][c][0][0]);
               c4 = _mm_mul_ps(a4,b4);
               sum4 = _mm_add_ps(sum4,c4);
 		      }
-          _mm_store_ps(&temp[0],sum4);
-          float sum = temp[0] + temp[1] + temp[2] + temp[3];
+          _mm_storeu_ps(&temp[0],sum4);
+          sum = temp[0] + temp[1] + temp[2] + temp[3];
+          
+          for(i = 0; i < nchannels%4; i++){
+            sum += image[w][h][i+(nchannels-(nchannels%4))] * kernels[m][i+(nchannels-(nchannels%4))][0][0];
+          }
+
 					output[m][w][h] = sum;
 		    }
 		  }
@@ -257,14 +267,27 @@ void team_conv(float *** image, float **** kernels, float *** output,
 		for ( m = 0; m < nkernels; m++ ) {
 		  for ( w = 0; w < width; w++ ) {
 		    for ( h = 0; h < height; h++ ) {
-		      double sum = 0.0;
-		      for ( c = 0; c < nchannels; c++ ) {
+          sum4 = _mm_setzero_ps();
+		      for ( c = 0; c < nchannels-3; c+=4 ) {
 		        for ( x = 0; x < kernel_order; x++) {
 		          for ( y = 0; y < kernel_order; y++ ) {
-		            sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+  		          a4 = _mm_load_ps(&image[w+x][h+y][c]);
+                b4 = _mm_setr_ps(kernels[m][c][x][y],kernels[m][c+1][x][y],kernels[m][c+2][x][y],kernels[m][c+3][x][y]);
+                c4 = _mm_mul_ps(a4,b4);
+                sum4 = _mm_add_ps(sum4,c4);
 		          }
 		        }
 		      }
+          
+          _mm_storeu_ps(&temp[0],sum4);
+          sum = temp[0] + temp[1] + temp[2] + temp[3];
+          for ( x = 0; x < kernel_order; x++) {
+            for ( y = 0; y < kernel_order; y++ ) {
+              for(i = 0; i < nchannels%4; i++){
+                sum += image[w+x][h+y][i+(nchannels-(nchannels%4))] * kernels[m][i+(nchannels-(nchannels%4))][x][y];
+              }
+            }
+          }
 					output[m][w][h] = sum;
 		    }
 		  }
