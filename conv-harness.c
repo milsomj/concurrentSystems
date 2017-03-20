@@ -205,7 +205,7 @@ void multichannel_conv(float *** image, float **** kernels, float *** output,
                        int kernel_order)
 {
   int h, w, x, y, c, m;
-
+  //#pragma omp parallel for private(m,w,h,c,x,y) collapse(3)
   for ( m = 0; m < nkernels; m++ ) {
     for ( w = 0; w < width; w++ ) {
       for ( h = 0; h < height; h++ ) {
@@ -229,14 +229,43 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int kernel_order)
 {
   int h, w, x, y, c, m;
+  float kerns[nkernels][kernel_order][kernel_order][nchannels];
+  int i,j,k,l;
+  for(i = 0; i< nkernels;i++){
+    for(j = 0; j< kernel_order;j++){
+      for(k = 0; k< kernel_order;k++){
+        for(l = 0; l< nchannels;l++){
+          kerns[i][j][k][l] = kernels[i][k][l][j];
+        }
+      }
+    } 
+  }
+  printf("%s\n", "OKAY");
+  __m128 a4,b4,c4,sum4;
+  float temp[] = {0.0,0.0,0.0,0.0};
+  #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3)
   for ( m = 0; m < nkernels; m++ ) {
     for ( w = 0; w < width; w++ ) {
       for ( h = 0; h < height; h++ ) {
-        double sum = 0.0;
-        for ( c = 0; c < nchannels; c++ ) {
+        float sum;
+        sum4 = _mm_setzero_ps();
+        for ( x = 0; x < kernel_order; x++) {
+          for ( y = 0; y < kernel_order; y++ ) {
+            for ( c = 0; c < nchannels-3; c+=4 ) {
+              a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
+              b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
+              c4 = _mm_mul_ps(a4,b4);
+              sum4 = _mm_add_ps(sum4,c4);
+              //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+            }
+          }
+          _mm_storeu_ps(&temp[0],sum4);
+          sum = temp[0] + temp[1] + temp[2] + temp[3];
           for ( x = 0; x < kernel_order; x++) {
             for ( y = 0; y < kernel_order; y++ ) {
-              sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+              for(i = 0; i < nchannels%4; i++){
+                sum += image[w+x][h+y][i+(nchannels-(nchannels%4))] * kerns[m][x][y][i+(nchannels-(nchannels%4))];
+              }
             }
           }
         }
@@ -314,7 +343,8 @@ int main(int argc, char ** argv)
   mul_time2 = (stop_time2.tv_sec - start_time2.tv_sec) * 1000000L +
     (stop_time2.tv_usec - start_time2.tv_usec);
   printf("     Dave time: %lld microseconds  Team conv time: %lld microseconds\n", mul_time1, mul_time2);
-
+  float factor = mul_time1/mul_time2;
+  printf("Factor: %f\n", factor)
   DEBUGGING(write_out(output, nkernels, width, height));
 
   /* now check that the team's multichannel convolution routine
