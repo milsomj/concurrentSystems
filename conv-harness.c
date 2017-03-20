@@ -232,10 +232,10 @@ void team_conv(float *** image, float **** kernels, float *** output,
   float kerns[nkernels][kernel_order][kernel_order][nchannels];
   int i,j,k,l;
   for(i = 0; i< nkernels;i++){
-    for(j = 0; j< kernel_order;j++){
+    for(j = 0; j< nchannels;j++){
       for(k = 0; k< kernel_order;k++){
-        for(l = 0; l< nchannels;l++){
-          kerns[i][j][k][l] = kernels[i][k][l][j];
+        for(l = 0; l< kernel_order;l++){
+          kerns[i][k][l][j] = kernels[i][j][k][l];
         }
       }
     } 
@@ -249,9 +249,9 @@ void team_conv(float *** image, float **** kernels, float *** output,
       for ( h = 0; h < height; h++ ) {
         float sum;
         sum4 = _mm_setzero_ps();
-        for ( x = 0; x < kernel_order; x++) {
-          for ( y = 0; y < kernel_order; y++ ) {
-            for ( c = 0; c < nchannels-3; c+=4 ) {
+        for ( c = 0; c < nchannels-3; c+=4 ) {
+          for ( x = 0; x < kernel_order; x++) {
+            for ( y = 0; y < kernel_order; y++ ) {
               a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
               b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
               c4 = _mm_mul_ps(a4,b4);
@@ -259,13 +259,13 @@ void team_conv(float *** image, float **** kernels, float *** output,
               //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
             }
           }
-          _mm_storeu_ps(&temp[0],sum4);
-          sum = temp[0] + temp[1] + temp[2] + temp[3];
-          for ( x = 0; x < kernel_order; x++) {
-            for ( y = 0; y < kernel_order; y++ ) {
-              for(i = 0; i < nchannels%4; i++){
-                sum += image[w+x][h+y][i+(nchannels-(nchannels%4))] * kerns[m][x][y][i+(nchannels-(nchannels%4))];
-              }
+        }
+        _mm_storeu_ps(&temp[0],sum4);
+        sum = temp[0] + temp[1] + temp[2] + temp[3];
+        for ( x = 0; x < kernel_order; x++) {
+          for ( y = 0; y < kernel_order; y++ ) {
+            for(i = c; i < nchannels; i++){
+              sum += image[w+x][h+y][i] * kerns[m][x][y][i];
             }
           }
         }
