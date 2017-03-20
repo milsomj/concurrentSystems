@@ -184,11 +184,11 @@ void check_result(float *** result, float *** control,
   }
 
   if ( sum_abs_diff > EPSILON ) {
-    fprintf(stderr, "WARNING: sum of absolute differences (%f) > EPSILON (%f)\n",
+    fprintf(stderr, "  WARNING: sum (%f) > EPSILON (%f)    FAIL\n",
             sum_abs_diff, EPSILON);
   }
-  else if(sum_abs_diff > 0 && n == 1){
-    printf("COMMENT: sum of absolute differences (%f)  within acceptable range (%f)\n", sum_abs_diff, EPSILON);
+  else if(sum_abs_diff > 0){
+    printf("  COMMENT: sum (%f) < EPSILON (%f)    PASS\n", sum_abs_diff, EPSILON);
   }
 }
 
@@ -221,80 +221,221 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int width, int height, int nchannels, int nkernels,
                int kernel_order)
 {
-  int h, w, x, y, c, m, tid, nthreads;
-
+  int h, w, x, y, c, m;
+  float kerns[nkernels][kernel_order][kernel_order][nchannels];
+  int i,j,k,l;
+  __m128 a4,b4,c4,sum4;
+  float temp[] = {0.0,0.0,0.0,0.0};
   switch(kernel_order){
     case 1:
+      for(i = 0; i< nkernels;i++){
+        for(j = 0; j< nchannels;j++){
+          for(k = 0; k< kernel_order;k++){
+            for(l = 0; l< kernel_order;l++){
+              kerns[i][k][l][j] = kernels[i][j][k][l];
+            }
+          }
+        } 
+      }
+      printf("%s\n", "  OKAY");
+      //__m128d sum4, c4d;
+      #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) //collapse(3) //schedule(auto)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
-            double sum = 0.0;
-            for ( c = 0; c < nchannels; c++ ) {
-              sum += image[w][h][c] * kernels[m][c][0][0];
-            }   
+            double sum;
+            sum4 = _mm_setzero_ps();
+            for ( c = 0; c < nchannels-3; c+=4 ) {
+              a4 = _mm_loadu_ps(&image[w][h][c]);
+              b4 = _mm_loadu_ps(&kerns[m][0][0][c]);
+              c4 = _mm_mul_ps(a4,b4);
+              //c4d = _mm_castps_pd(c4);
+              sum4 = _mm_add_ps(sum4,c4);
+              //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+            }
+            _mm_storeu_ps(&temp[0],sum4);
+            sum = temp[0] + temp[1] + temp[2] + temp[3];
+
+            for(i = c; i < nchannels; i++){
+              sum += image[w][h][i] * kerns[m][0][0][i];
+            }
             output[m][w][h] = sum;
           }
         }
       }
       break;
     case 3:
-      for ( m = 0; m < nkernels; m++ ) {
-        for ( w = 0; w < width; w++ ) {
-          for ( h = 0; h < height; h++ ) {
-            double sum = 0.0;
-            for ( c = 0; c < nchannels; c++ ) {
-              sum += (image[w][h][c] * kernels[m][c][0][0]) + (image[w][h+1][c] * kernels[m][c][0][1]) + (image[w][h+2][c] * kernels[m][c][0][2]) + (image[w+1][h][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+2][h][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]);
-            }   
-            output[m][w][h] = sum;
-          }
+      if(1){
+        for(i = 0; i< nkernels;i++){
+          for(j = 0; j< nchannels;j++){
+            for(k = 0; k< kernel_order;k++){
+              for(l = 0; l< kernel_order;l++){
+                kerns[i][k][l][j] = kernels[i][j][k][l];
+              }
+            }
+          } 
         }
-      }
-      break;
-    case 5:
-        //printf("Status of nested parallelism is %d\n", omp_get_nested());
-        omp_set_nested(1);
-        //printf("Status of nested parallelism is %d\n", omp_get_nested());
-        #pragma omp parallel for private(tid, nthreads, h,c,x,y) //collapse()
+        printf("%s\n", "  OKAY");
+        //__m128d sum4, c4d;
+        #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
         for ( m = 0; m < nkernels; m++ ) {
-          /*printf("starting thread = %d on matrix = %d\n", tid, m);
-          if (tid = 0) 
-             {
-               nthreads = omp_get_num_threads();
-               printf("Number of threads = %d\n", nthreads);
-             }*/
           for ( w = 0; w < width; w++ ) {
-            //#pragma omp parallel for private(sum)
             for ( h = 0; h < height; h++ ) {
-              double sum = 0.0;
-              //printf("on h = %d out of %d w = %d out of %d  m = %d out of %d\n", h,height,w,width,m,nkernels);
-              //#pragma omp parallel for lastprivate(sum)
-              for ( c = 0; c < nchannels; c++ ) {
+              double sum;
+              sum4 = _mm_setzero_ps();
+              for ( c = 0; c < nchannels-3; c+=4 ) {
                 for ( x = 0; x < kernel_order; x++) {
                   for ( y = 0; y < kernel_order; y++ ) {
-                    sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+                    a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
+                    b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
+                    c4 = _mm_mul_ps(a4,b4);
+                    //c4d = _mm_castps_pd(c4);
+                    sum4 = _mm_add_ps(sum4,c4);
+                    //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+                  }
+                }
+              }
+              _mm_storeu_ps(&temp[0],sum4);
+              sum = temp[0] + temp[1] + temp[2] + temp[3];
+              for ( x = 0; x < kernel_order; x++) {
+                for ( y = 0; y < kernel_order; y++ ) {
+                  for(i = c; i < nchannels; i++){
+                    sum += image[w+x][h+y][i] * kerns[m][x][y][i];
                   }
                 }
               }
               output[m][w][h] = sum;
             }
           }
-          //printf("ending thread = %d for matrix = %d\n", tid, m);
         }
-      break;
-    case 7:
-      //#pragma omp parallel for num_threads(nkernels)
+        break;
+      }
+      else{
+        printf("%s\n", "  OKAY");
+        //__m128d sum4, c4d;
+        #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
+        for ( m = 0; m < nkernels; m++ ) {
+          for ( w = 0; w < width; w++ ) {
+            for ( h = 0; h < height; h++ ) {
+              double sum;
+              sum4 = _mm_setzero_ps();
+              for ( c = 0; c < nchannels-3; c+=4 ) {
+                for ( x = 0; x < kernel_order; x++) {
+                  for ( y = 0; y < kernel_order; y++ ) {
+                    a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
+                    b4 = _mm_loadu_ps(&kernels[m][c][x][y]);
+                    c4 = _mm_mul_ps(a4,b4);
+                    //c4d = _mm_castps_pd(c4);
+                    sum4 = _mm_add_ps(sum4,c4);
+                    //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+                  }
+                }
+              }
+              _mm_storeu_ps(&temp[0],sum4);
+              sum = temp[0] + temp[1] + temp[2] + temp[3];
+              for ( x = 0; x < kernel_order; x++) {
+                for ( y = 0; y < kernel_order; y++ ) {
+                  for(i = c; i < nchannels; i++){
+                    sum += image[w+x][h+y][i] * kerns[m][x][y][i];
+                  }
+                }
+              }
+              output[m][w][h] = sum;
+            }
+          }
+        }
+        break;
+      }
+    case 5:
+      for(i = 0; i< nkernels;i++){
+        for(j = 0; j< nchannels;j++){
+          for(k = 0; k< kernel_order;k++){
+            for(l = 0; l< kernel_order;l++){
+              kerns[i][k][l][j] = kernels[i][j][k][l];
+            }
+          }
+        } 
+      }
+      printf("%s\n", "  OKAY");
+      //__m128d sum4, c4d;
+      //omp_set_dynamic(1);
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
-            double sum = 0.0;
-            for ( c = 0; c < nchannels; c++ ) {
-              sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+0][h+5][c] * kernels[m][c][0][5]) + (image[w+0][h+6][c] * kernels[m][c][0][6]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+1][h+5][c] * kernels[m][c][1][5]) + (image[w+1][h+6][c] * kernels[m][c][1][6]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+2][h+5][c] * kernels[m][c][2][5]) + (image[w+2][h+6][c] * kernels[m][c][2][6]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+3][h+5][c] * kernels[m][c][3][5]) + (image[w+3][h+6][c] * kernels[m][c][3][6]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]) + (image[w+4][h+5][c] * kernels[m][c][4][5]) + (image[w+4][h+6][c] * kernels[m][c][4][6]) + (image[w+5][h+0][c] * kernels[m][c][5][0]) + (image[w+5][h+1][c] * kernels[m][c][5][1]) + (image[w+5][h+2][c] * kernels[m][c][5][2]) + (image[w+5][h+3][c] * kernels[m][c][5][3]) + (image[w+5][h+4][c] * kernels[m][c][5][4]) + (image[w+5][h+5][c] * kernels[m][c][5][5]) + (image[w+5][h+6][c] * kernels[m][c][5][6]) + (image[w+6][h+0][c] * kernels[m][c][6][0]) + (image[w+6][h+1][c] * kernels[m][c][6][1]) + (image[w+6][h+2][c] * kernels[m][c][6][2]) + (image[w+6][h+3][c] * kernels[m][c][6][3]) + (image[w+6][h+4][c] * kernels[m][c][6][4]) + (image[w+6][h+5][c] * kernels[m][c][6][5]) + (image[w+6][h+6][c] * kernels[m][c][6][6]);
-            }   
+            double sum;
+            sum4 = _mm_setzero_ps();
+            for ( c = 0; c < nchannels-3; c+=4 ) {
+              for ( x = 0; x < kernel_order; x++) {
+                for ( y = 0; y < kernel_order; y++ ) {
+                  a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
+                  b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
+                  c4 = _mm_mul_ps(a4,b4);
+                  //c4d = _mm_castps_pd(c4);
+                  sum4 = _mm_add_ps(sum4,c4);
+                  //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+                }
+              }
+            }
+            _mm_storeu_ps(&temp[0],sum4);
+            sum = temp[0] + temp[1] + temp[2] + temp[3];
+            for ( x = 0; x < kernel_order; x++) {
+              for ( y = 0; y < kernel_order; y++ ) {
+                for(i = c; i < nchannels; i++){
+                  sum += image[w+x][h+y][i] * kerns[m][x][y][i];
+                }
+              }
+            }
+            output[m][w][h] = sum;
+          }
+        }
+      }
+      break;
+    case 7:
+      for(i = 0; i< nkernels;i++){
+        for(j = 0; j< nchannels;j++){
+          for(k = 0; k< kernel_order;k++){
+            for(l = 0; l< kernel_order;l++){
+              kerns[i][k][l][j] = kernels[i][j][k][l];
+            }
+          }
+        } 
+      }
+      printf("%s\n", "  OKAY");
+      //__m128d sum4, c4d;
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum;
+            sum4 = _mm_setzero_ps();
+            for ( c = 0; c < nchannels-3; c+=4 ) {
+              for ( x = 0; x < kernel_order; x++) {
+                for ( y = 0; y < kernel_order; y++ ) {
+                  a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
+                  b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
+                  c4 = _mm_mul_ps(a4,b4);
+                  //c4d = _mm_castps_pd(c4);
+                  sum4 = _mm_add_ps(sum4,c4);
+                  //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
+                }
+              }
+            }
+            _mm_storeu_ps(&temp[0],sum4);
+            sum = temp[0] + temp[1] + temp[2] + temp[3];
+            for ( x = 0; x < kernel_order; x++) {
+              for ( y = 0; y < kernel_order; y++ ) {
+                for(i = c; i < nchannels; i++){
+                  sum += image[w+x][h+y][i] * kerns[m][x][y][i];
+                }
+              }
+            }
             output[m][w][h] = sum;
           }
         }
       }
   }
+  
 }
 
 int main(int argc, char ** argv)
@@ -338,13 +479,14 @@ int main(int argc, char ** argv)
   /* allocate the matrices */
 
   int n = 1;
-  for(int i = 1; i <= 7; i+=2){
+  int i,j;
+  for(i = 1; i <= 7; i+=2){
     kernel_order = i;
-    printf("case %d:\n", i);
+    printf("%d %d %d %d %d:\n", width, height, i, nchannels, nkernels);
     mul_time1 = 0;
     mul_time2 = 0;
 
-    for(int j = 0; j < n; j++){
+    for(j = 0; j < n; j++){
       image = gen_random_3d_matrix(width+kernel_order, height + kernel_order,
                                    nchannels);
       kernels = gen_random_4d_matrix(nkernels, nchannels, kernel_order, kernel_order);
@@ -381,8 +523,8 @@ int main(int argc, char ** argv)
     mul_time1 /= n;
     mul_time2 /= n;
     diff = mul_time1 / mul_time2; 
-    printf("     Dave avg time: %lld microseconds  Team avg conv time: %lld microseconds\n", mul_time1, mul_time2);
-    printf("       Improvement factor: %lld\n", diff);
+    printf("     Dave: %lld us  Team: %lld us   Factor: %lld\n", mul_time1, mul_time2, diff);
   }
+    printf("\n");
   return 0;
 }
