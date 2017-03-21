@@ -183,11 +183,11 @@ void check_result(float *** result, float *** control,
     }
   }
 
-  if ( sum_abs_diff > EPSILON ) {
+  if ( sum_abs_diff > EPSILON && n < 5) {
     fprintf(stderr, "  WARNING: sum (%f) > EPSILON (%f)    FAIL\n",
             sum_abs_diff, EPSILON);
   }
-  else if(sum_abs_diff > 0){
+  else if(sum_abs_diff > 0 && n < 5){
     printf("  COMMENT: sum (%f) < EPSILON (%f)    PASS\n", sum_abs_diff, EPSILON);
   }
 }
@@ -198,7 +198,7 @@ void multichannel_conv(float *** image, float **** kernels, float *** output,
                        int kernel_order)
 {
   int h, w, x, y, c, m;
-
+  //#pragma omp parallel for private(m,w,h,c,x,y)
   for ( m = 0; m < nkernels; m++ ) {
     for ( w = 0; w < width; w++ ) {
       for ( h = 0; h < height; h++ ) {
@@ -237,7 +237,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
           }
         } 
       }
-      printf("%s\n", "  OKAY");
+      //printf("%s\n", "  OKAY");
       //__m128d sum4, c4d;
       #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) //collapse(3) //schedule(auto)
       for ( m = 0; m < nkernels; m++ ) {
@@ -265,87 +265,37 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 3:
-      if(1){
-        for(i = 0; i< nkernels;i++){
-          for(j = 0; j< nchannels;j++){
-            for(k = 0; k< kernel_order;k++){
-              for(l = 0; l< kernel_order;l++){
-                kerns[i][k][l][j] = kernels[i][j][k][l];
-              }
-            }
-          } 
-        }
-        printf("%s\n", "  OKAY");
-        //__m128d sum4, c4d;
-        #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
-        for ( m = 0; m < nkernels; m++ ) {
-          for ( w = 0; w < width; w++ ) {
-            for ( h = 0; h < height; h++ ) {
-              double sum;
-              sum4 = _mm_setzero_ps();
-              for ( c = 0; c < nchannels-3; c+=4 ) {
-                for ( x = 0; x < kernel_order; x++) {
-                  for ( y = 0; y < kernel_order; y++ ) {
-                    a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
-                    b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
-                    c4 = _mm_mul_ps(a4,b4);
-                    //c4d = _mm_castps_pd(c4);
-                    sum4 = _mm_add_ps(sum4,c4);
-                    //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
-                  }
-                }
-              }
-              _mm_storeu_ps(&temp[0],sum4);
-              sum = temp[0] + temp[1] + temp[2] + temp[3];
-              for ( x = 0; x < kernel_order; x++) {
-                for ( y = 0; y < kernel_order; y++ ) {
-                  for(i = c; i < nchannels; i++){
-                    sum += image[w+x][h+y][i] * kerns[m][x][y][i];
-                  }
-                }
-              }
-              output[m][w][h] = sum;
+      for(i = 0; i< nkernels;i++){
+        for(j = 0; j< nchannels;j++){
+          for(k = 0; k< kernel_order;k++){
+            for(l = 0; l< kernel_order;l++){
+              kerns[i][k][l][j] = kernels[i][j][k][l];
             }
           }
-        }
-        break;
+        } 
       }
-      else{
-        printf("%s\n", "  OKAY");
-        //__m128d sum4, c4d;
-        #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
-        for ( m = 0; m < nkernels; m++ ) {
-          for ( w = 0; w < width; w++ ) {
-            for ( h = 0; h < height; h++ ) {
-              double sum;
-              sum4 = _mm_setzero_ps();
-              for ( c = 0; c < nchannels-3; c+=4 ) {
-                for ( x = 0; x < kernel_order; x++) {
-                  for ( y = 0; y < kernel_order; y++ ) {
-                    a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
-                    b4 = _mm_loadu_ps(&kernels[m][c][x][y]);
-                    c4 = _mm_mul_ps(a4,b4);
-                    //c4d = _mm_castps_pd(c4);
-                    sum4 = _mm_add_ps(sum4,c4);
-                    //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
-                  }
-                }
-              }
-              _mm_storeu_ps(&temp[0],sum4);
-              sum = temp[0] + temp[1] + temp[2] + temp[3];
-              for ( x = 0; x < kernel_order; x++) {
-                for ( y = 0; y < kernel_order; y++ ) {
-                  for(i = c; i < nchannels; i++){
-                    sum += image[w+x][h+y][i] * kerns[m][x][y][i];
-                  }
-                }
-              }
-              output[m][w][h] = sum;
+      //printf("%s\n", "  OKAY");
+      //__m128d sum4, c4d;
+      #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) //collapse(3) //schedule(auto)
+      for ( m = 0; m < nkernels; m++ ) {
+        for ( w = 0; w < width; w++ ) {
+          for ( h = 0; h < height; h++ ) {
+            double sum;
+            sum4 = _mm_setzero_ps();
+            for ( c = 0; c < nchannels-3; c+=4 ) {
+              a4=_mm_loadu_ps(&image[w+0][h+0][c]); b4=_mm_loadu_ps(&kerns[m][0][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+1][c]); b4=_mm_loadu_ps(&kerns[m][0][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+2][c]); b4=_mm_loadu_ps(&kerns[m][0][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+0][c]); b4=_mm_loadu_ps(&kerns[m][1][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+1][c]); b4=_mm_loadu_ps(&kerns[m][1][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+2][c]); b4=_mm_loadu_ps(&kerns[m][1][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+0][c]); b4=_mm_loadu_ps(&kerns[m][2][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+1][c]); b4=_mm_loadu_ps(&kerns[m][2][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+2][c]); b4=_mm_loadu_ps(&kerns[m][2][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);
             }
+            _mm_storeu_ps(&temp[0],sum4);
+            sum = temp[0] + temp[1] + temp[2] + temp[3];
+
+            for(i = c; i < nchannels; i++){
+              sum += image[w][h][i] * kerns[m][0][0][i];
+            }
+            output[m][w][h] = sum;
           }
         }
-        break;
       }
+      break;
     case 5:
       for(i = 0; i< nkernels;i++){
         for(j = 0; j< nchannels;j++){
@@ -356,7 +306,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
           }
         } 
       }
-      printf("%s\n", "  OKAY");
+      //printf("%s\n", "  OKAY");
       //__m128d sum4, c4d;
       //omp_set_dynamic(1);
       #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
@@ -366,16 +316,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
             double sum;
             sum4 = _mm_setzero_ps();
             for ( c = 0; c < nchannels-3; c+=4 ) {
-              for ( x = 0; x < kernel_order; x++) {
-                for ( y = 0; y < kernel_order; y++ ) {
-                  a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
-                  b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
-                  c4 = _mm_mul_ps(a4,b4);
-                  //c4d = _mm_castps_pd(c4);
-                  sum4 = _mm_add_ps(sum4,c4);
-                  //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
-                }
-              }
+              a4=_mm_loadu_ps(&image[w+0][h+0][c]); b4=_mm_loadu_ps(&kerns[m][0][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+1][c]); b4=_mm_loadu_ps(&kerns[m][0][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+2][c]); b4=_mm_loadu_ps(&kerns[m][0][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+3][c]); b4=_mm_loadu_ps(&kerns[m][0][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+4][c]); b4=_mm_loadu_ps(&kerns[m][0][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+0][c]); b4=_mm_loadu_ps(&kerns[m][1][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+1][c]); b4=_mm_loadu_ps(&kerns[m][1][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+2][c]); b4=_mm_loadu_ps(&kerns[m][1][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+3][c]); b4=_mm_loadu_ps(&kerns[m][1][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+4][c]); b4=_mm_loadu_ps(&kerns[m][1][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+0][c]); b4=_mm_loadu_ps(&kerns[m][2][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+1][c]); b4=_mm_loadu_ps(&kerns[m][2][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+2][c]); b4=_mm_loadu_ps(&kerns[m][2][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+3][c]); b4=_mm_loadu_ps(&kerns[m][2][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+4][c]); b4=_mm_loadu_ps(&kerns[m][2][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+0][c]); b4=_mm_loadu_ps(&kerns[m][3][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+1][c]); b4=_mm_loadu_ps(&kerns[m][3][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+2][c]); b4=_mm_loadu_ps(&kerns[m][3][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+3][c]); b4=_mm_loadu_ps(&kerns[m][3][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+4][c]); b4=_mm_loadu_ps(&kerns[m][3][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+0][c]); b4=_mm_loadu_ps(&kerns[m][4][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+1][c]); b4=_mm_loadu_ps(&kerns[m][4][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+2][c]); b4=_mm_loadu_ps(&kerns[m][4][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+3][c]); b4=_mm_loadu_ps(&kerns[m][4][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+4][c]); b4=_mm_loadu_ps(&kerns[m][4][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);
             }
             _mm_storeu_ps(&temp[0],sum4);
             sum = temp[0] + temp[1] + temp[2] + temp[3];
@@ -401,25 +342,17 @@ void team_conv(float *** image, float **** kernels, float *** output,
           }
         } 
       }
-      printf("%s\n", "  OKAY");
+      //printf("%s\n", "  OKAY");
       //__m128d sum4, c4d;
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(static)
+      //omp_set_dynamic(1);
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
             double sum;
             sum4 = _mm_setzero_ps();
             for ( c = 0; c < nchannels-3; c+=4 ) {
-              for ( x = 0; x < kernel_order; x++) {
-                for ( y = 0; y < kernel_order; y++ ) {
-                  a4 = _mm_loadu_ps(&image[w+x][h+y][c]);
-                  b4 = _mm_loadu_ps(&kerns[m][x][y][c]);
-                  c4 = _mm_mul_ps(a4,b4);
-                  //c4d = _mm_castps_pd(c4);
-                  sum4 = _mm_add_ps(sum4,c4);
-                  //sum += image[w+x][h+y][c] * kerns[m][x][y][c];
-                }
-              }
+              a4=_mm_loadu_ps(&image[w+0][h+0][c]); b4=_mm_loadu_ps(&kerns[m][0][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+1][c]); b4=_mm_loadu_ps(&kerns[m][0][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+2][c]); b4=_mm_loadu_ps(&kerns[m][0][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+3][c]); b4=_mm_loadu_ps(&kerns[m][0][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+4][c]); b4=_mm_loadu_ps(&kerns[m][0][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+5][c]); b4=_mm_loadu_ps(&kerns[m][0][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+0][h+6][c]); b4=_mm_loadu_ps(&kerns[m][0][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+0][c]); b4=_mm_loadu_ps(&kerns[m][1][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+1][c]); b4=_mm_loadu_ps(&kerns[m][1][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+2][c]); b4=_mm_loadu_ps(&kerns[m][1][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+3][c]); b4=_mm_loadu_ps(&kerns[m][1][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+4][c]); b4=_mm_loadu_ps(&kerns[m][1][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+5][c]); b4=_mm_loadu_ps(&kerns[m][1][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+1][h+6][c]); b4=_mm_loadu_ps(&kerns[m][1][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+0][c]); b4=_mm_loadu_ps(&kerns[m][2][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+1][c]); b4=_mm_loadu_ps(&kerns[m][2][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+2][c]); b4=_mm_loadu_ps(&kerns[m][2][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+3][c]); b4=_mm_loadu_ps(&kerns[m][2][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+4][c]); b4=_mm_loadu_ps(&kerns[m][2][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+5][c]); b4=_mm_loadu_ps(&kerns[m][2][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+2][h+6][c]); b4=_mm_loadu_ps(&kerns[m][2][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+0][c]); b4=_mm_loadu_ps(&kerns[m][3][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+1][c]); b4=_mm_loadu_ps(&kerns[m][3][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+2][c]); b4=_mm_loadu_ps(&kerns[m][3][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+3][c]); b4=_mm_loadu_ps(&kerns[m][3][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+4][c]); b4=_mm_loadu_ps(&kerns[m][3][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+5][c]); b4=_mm_loadu_ps(&kerns[m][3][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+3][h+6][c]); b4=_mm_loadu_ps(&kerns[m][3][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+0][c]); b4=_mm_loadu_ps(&kerns[m][4][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+1][c]); b4=_mm_loadu_ps(&kerns[m][4][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+2][c]); b4=_mm_loadu_ps(&kerns[m][4][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+3][c]); b4=_mm_loadu_ps(&kerns[m][4][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+4][c]); b4=_mm_loadu_ps(&kerns[m][4][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+5][c]); b4=_mm_loadu_ps(&kerns[m][4][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+4][h+6][c]); b4=_mm_loadu_ps(&kerns[m][4][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+0][c]); b4=_mm_loadu_ps(&kerns[m][5][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+1][c]); b4=_mm_loadu_ps(&kerns[m][5][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+2][c]); b4=_mm_loadu_ps(&kerns[m][5][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+3][c]); b4=_mm_loadu_ps(&kerns[m][5][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+4][c]); b4=_mm_loadu_ps(&kerns[m][5][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+5][c]); b4=_mm_loadu_ps(&kerns[m][5][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+5][h+6][c]); b4=_mm_loadu_ps(&kerns[m][5][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+0][c]); b4=_mm_loadu_ps(&kerns[m][6][0][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+1][c]); b4=_mm_loadu_ps(&kerns[m][6][1][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+2][c]); b4=_mm_loadu_ps(&kerns[m][6][2][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+3][c]); b4=_mm_loadu_ps(&kerns[m][6][3][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+4][c]); b4=_mm_loadu_ps(&kerns[m][6][4][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+5][c]); b4=_mm_loadu_ps(&kerns[m][6][5][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);a4=_mm_loadu_ps(&image[w+6][h+6][c]); b4=_mm_loadu_ps(&kerns[m][6][6][c]); c4=_mm_mul_ps(a4,b4); sum4=_mm_add_ps(sum4,c4);
             }
             _mm_storeu_ps(&temp[0],sum4);
             sum = temp[0] + temp[1] + temp[2] + temp[3];
