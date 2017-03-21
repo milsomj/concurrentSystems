@@ -276,7 +276,8 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       //printf("%s\n", "  OKAY");
       //__m128d sum4, c4d;
-      #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) //collapse(3) //schedule(auto)
+      //omp_set_dynamic(1);
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
@@ -287,9 +288,12 @@ void team_conv(float *** image, float **** kernels, float *** output,
             }
             _mm_storeu_ps(&temp[0],sum4);
             sum = temp[0] + temp[1] + temp[2] + temp[3];
-
-            for(i = c; i < nchannels; i++){
-              sum += image[w][h][i] * kerns[m][0][0][i];
+            for ( x = 0; x < kernel_order; x++) {
+              for ( y = 0; y < kernel_order; y++ ) {
+                for(i = c; i < nchannels; i++){
+                  sum += image[w+x][h+y][i] * kerns[m][x][y][i];
+                }
+              }
             }
             output[m][w][h] = sum;
           }
