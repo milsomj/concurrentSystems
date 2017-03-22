@@ -205,7 +205,7 @@ void multichannel_conv(float *** image, float **** kernels, float *** output,
                        int kernel_order)
 {
   int h, w, x, y, c, m;
-
+  //#pragma omp parallel for private(m,w,h,c,x,y) collapse(3) 
   for ( m = 0; m < nkernels; m++ ) {
     for ( w = 0; w < width; w++ ) {
       for ( h = 0; h < height; h++ ) {
@@ -233,10 +233,13 @@ void team_conv(float *** image, float **** kernels, float *** output,
   int i,j,k,l;
   __m128 a4,b4,c4,sum4;
   float temp[] = {0.0,0.0,0.0,0.0};
+  //branch to different switch statement optimisation if too small
   if(nchannels > 3){
+    //branch to a third switch statement if nchannels is not a multiple of 4
     if(nchannels%4==0){
       switch(kernel_order){
         case 1:
+          //reordering of array for vectorisation purposes
           for(i = 0; i< nkernels;i++){
             for(j = 0; j< nchannels;j++){
               for(k = 0; k< kernel_order;k++){
@@ -246,6 +249,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
               }
             } 
           }
+          //uses OpenMP to parallelize the outer loops
           #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) collapse(3) 
           for ( m = 0; m < nkernels; m++ ) {
             for ( w = 0; w < width; w++ ) {
@@ -345,7 +349,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
               }
             } 
           }
-          #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
+          #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3)
           for ( m = 0; m < nkernels; m++ ) {
             for ( w = 0; w < width; w++ ) {
               for ( h = 0; h < height; h++ ) {
@@ -480,7 +484,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
               }
             } 
           }
-          #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
+          #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3)
           for ( m = 0; m < nkernels; m++ ) {
             for ( w = 0; w < width; w++ ) {
               for ( h = 0; h < height; h++ ) {
@@ -509,16 +513,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
   else{
     switch(kernel_order){
     case 1:
-      for(i = 0; i< nkernels;i++){
-         for(j = 0; j< nchannels;j++){
-           for(k = 0; k< kernel_order;k++){
-             for(l = 0; l< kernel_order;l++){
-               kerns[i][k][l][j] = kernels[i][j][k][l];
-             }
-           }
-         } 
-       }
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) 
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) 
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
@@ -532,16 +527,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 3:
-      for(i = 0; i< nkernels;i++){
-         for(j = 0; j< nchannels;j++){
-           for(k = 0; k< kernel_order;k++){
-             for(l = 0; l< kernel_order;l++){
-               kerns[i][k][l][j] = kernels[i][j][k][l];
-             }
-           }
-         } 
-       }
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) 
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i)  
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
@@ -555,16 +541,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 5:
-      for(i = 0; i< nkernels;i++){
-         for(j = 0; j< nchannels;j++){
-           for(k = 0; k< kernel_order;k++){
-             for(l = 0; l< kernel_order;l++){
-               kerns[i][k][l][j] = kernels[i][j][k][l];
-             }
-           }
-         } 
-       }
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) 
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
@@ -578,23 +555,18 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 7:
-      for(i = 0; i< nkernels;i++){
-         for(j = 0; j< nchannels;j++){
-           for(k = 0; k< kernel_order;k++){
-             for(l = 0; l< kernel_order;l++){
-               kerns[i][k][l][j] = kernels[i][j][k][l];
-             }
-           }
-         } 
-       }
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) 
+      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) 
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
           for ( h = 0; h < height; h++ ) {
             double sum = 0.0;
             for ( c = 0; c < nchannels; c++ ) {
-              sum += (image[w+0][h+0][c] * kernels[m][c][0][0]) + (image[w+0][h+1][c] * kernels[m][c][0][1]) + (image[w+0][h+2][c] * kernels[m][c][0][2]) + (image[w+0][h+3][c] * kernels[m][c][0][3]) + (image[w+0][h+4][c] * kernels[m][c][0][4]) + (image[w+0][h+5][c] * kernels[m][c][0][5]) + (image[w+0][h+6][c] * kernels[m][c][0][6]) + (image[w+1][h+0][c] * kernels[m][c][1][0]) + (image[w+1][h+1][c] * kernels[m][c][1][1]) + (image[w+1][h+2][c] * kernels[m][c][1][2]) + (image[w+1][h+3][c] * kernels[m][c][1][3]) + (image[w+1][h+4][c] * kernels[m][c][1][4]) + (image[w+1][h+5][c] * kernels[m][c][1][5]) + (image[w+1][h+6][c] * kernels[m][c][1][6]) + (image[w+2][h+0][c] * kernels[m][c][2][0]) + (image[w+2][h+1][c] * kernels[m][c][2][1]) + (image[w+2][h+2][c] * kernels[m][c][2][2]) + (image[w+2][h+3][c] * kernels[m][c][2][3]) + (image[w+2][h+4][c] * kernels[m][c][2][4]) + (image[w+2][h+5][c] * kernels[m][c][2][5]) + (image[w+2][h+6][c] * kernels[m][c][2][6]) + (image[w+3][h+0][c] * kernels[m][c][3][0]) + (image[w+3][h+1][c] * kernels[m][c][3][1]) + (image[w+3][h+2][c] * kernels[m][c][3][2]) + (image[w+3][h+3][c] * kernels[m][c][3][3]) + (image[w+3][h+4][c] * kernels[m][c][3][4]) + (image[w+3][h+5][c] * kernels[m][c][3][5]) + (image[w+3][h+6][c] * kernels[m][c][3][6]) + (image[w+4][h+0][c] * kernels[m][c][4][0]) + (image[w+4][h+1][c] * kernels[m][c][4][1]) + (image[w+4][h+2][c] * kernels[m][c][4][2]) + (image[w+4][h+3][c] * kernels[m][c][4][3]) + (image[w+4][h+4][c] * kernels[m][c][4][4]) + (image[w+4][h+5][c] * kernels[m][c][4][5]) + (image[w+4][h+6][c] * kernels[m][c][4][6]) + (image[w+5][h+0][c] * kernels[m][c][5][0]) + (image[w+5][h+1][c] * kernels[m][c][5][1]) + (image[w+5][h+2][c] * kernels[m][c][5][2]) + (image[w+5][h+3][c] * kernels[m][c][5][3]) + (image[w+5][h+4][c] * kernels[m][c][5][4]) + (image[w+5][h+5][c] * kernels[m][c][5][5]) + (image[w+5][h+6][c] * kernels[m][c][5][6]) + (image[w+6][h+0][c] * kernels[m][c][6][0]) + (image[w+6][h+1][c] * kernels[m][c][6][1]) + (image[w+6][h+2][c] * kernels[m][c][6][2]) + (image[w+6][h+3][c] * kernels[m][c][6][3]) + (image[w+6][h+4][c] * kernels[m][c][6][4]) + (image[w+6][h+5][c] * kernels[m][c][6][5]) + (image[w+6][h+6][c] * kernels[m][c][6][6]);
-            }   
+              for ( x = 0; x < kernel_order; x++) {
+                for ( y = 0; y < kernel_order; y++ ) {
+                  sum += image[w+x][h+y][c] * kernels[m][c][x][y];
+                }
+              }
+            }
             output[m][w][h] = sum;
           }
         }
