@@ -461,32 +461,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
           }
         }
       }
-  }
-     for(i = 0; i< nkernels;i++){
-        for(j = 0; j< nchannels;j++){
-          for(k = 0; k< kernel_order;k++){
-            for(l = 0; l< kernel_order;l++){
-              kerns[i][k][l][j] = kernels[i][j][k][l];
-            }
-          }
-        } 
-      }
-      #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) 
-      for ( m = 0; m < nkernels; m++ ) {
-        for ( w = 0; w < width; w++ ) {
-          for ( h = 0; h < height; h++ ) {
-            double sum = 0.0;
-            for ( c = 0; c < nchannels; c++ ) {
-              for ( x = 0; x < kernel_order; x++) {
-                for ( y = 0; y < kernel_order; y++ ) {
-                  sum += image[w+x][h+y][c] * kerns[m][x][y][c];
-                }
-              }
-            }
-            output[m][w][h] = sum;
-          }
-        }
-      }
+    }
   }
 }
 
