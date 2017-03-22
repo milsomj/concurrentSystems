@@ -436,7 +436,7 @@ int main(int argc, char ** argv)
   mul_time2 = (stop_time2.tv_sec - start_time2.tv_sec) * 1000000L +
     (stop_time2.tv_usec - start_time2.tv_usec);
   printf("     Dave time: %lld microseconds  Team conv time: %lld microseconds\n", mul_time1, mul_time2);
-  printf("         Optimisation Factor: %lld", mul_time1/mul_time2);
+  printf("         Optimisation Factor: %lld\n", mul_time1/mul_time2);
 
   DEBUGGING(write_out(output, nkernels, width, height));
 
