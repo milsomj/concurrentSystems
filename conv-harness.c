@@ -226,19 +226,17 @@ void team_conv(float *** image, float **** kernels, float *** output,
   int i,j,k,l;
   __m128 a4,b4,c4,sum4;
   float temp[] = {0.0,0.0,0.0,0.0};
+  for(i = 0; i< nkernels;i++){
+    for(j = 0; j< nchannels;j++){
+      for(k = 0; k< kernel_order;k++){
+        for(l = 0; l< kernel_order;l++){
+          kerns[i][k][l][j] = kernels[i][j][k][l];
+        }
+      }
+    } 
+  }
   switch(kernel_order){
     case 1:
-      for(i = 0; i< nkernels;i++){
-        for(j = 0; j< nchannels;j++){
-          for(k = 0; k< kernel_order;k++){
-            for(l = 0; l< kernel_order;l++){
-              kerns[i][k][l][j] = kernels[i][j][k][l];
-            }
-          }
-        } 
-      }
-      //printf("%s\n", "  OKAY");
-      //__m128d sum4, c4d;
       #pragma omp parallel for private(m,w,h,c,a4,b4,c4,sum4,temp,i) //collapse(3) //schedule(auto)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
@@ -265,18 +263,6 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 3:
-      for(i = 0; i< nkernels;i++){
-        for(j = 0; j< nchannels;j++){
-          for(k = 0; k< kernel_order;k++){
-            for(l = 0; l< kernel_order;l++){
-              kerns[i][k][l][j] = kernels[i][j][k][l];
-            }
-          }
-        } 
-      }
-      //printf("%s\n", "  OKAY");
-      //__m128d sum4, c4d;
-      //omp_set_dynamic(1);
       #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
@@ -301,18 +287,6 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 5:
-      for(i = 0; i< nkernels;i++){
-        for(j = 0; j< nchannels;j++){
-          for(k = 0; k< kernel_order;k++){
-            for(l = 0; l< kernel_order;l++){
-              kerns[i][k][l][j] = kernels[i][j][k][l];
-            }
-          }
-        } 
-      }
-      //printf("%s\n", "  OKAY");
-      //__m128d sum4, c4d;
-      //omp_set_dynamic(1);
       #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
@@ -337,18 +311,6 @@ void team_conv(float *** image, float **** kernels, float *** output,
       }
       break;
     case 7:
-      for(i = 0; i< nkernels;i++){
-        for(j = 0; j< nchannels;j++){
-          for(k = 0; k< kernel_order;k++){
-            for(l = 0; l< kernel_order;l++){
-              kerns[i][k][l][j] = kernels[i][j][k][l];
-            }
-          }
-        } 
-      }
-      //printf("%s\n", "  OKAY");
-      //__m128d sum4, c4d;
-      //omp_set_dynamic(1);
       #pragma omp parallel for private(m,w,h,c,x,y,a4,b4,c4,sum4,temp,i) collapse(3) //schedule(dynamic)
       for ( m = 0; m < nkernels; m++ ) {
         for ( w = 0; w < width; w++ ) {
