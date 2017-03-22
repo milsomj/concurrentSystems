@@ -222,7 +222,7 @@ void team_conv(float *** image, float **** kernels, float *** output,
                int kernel_order)
 {
   int h, w, x, y, c, m;
-  float kerns[nkernels][kernel_order][kernel_order][nchannels];
+  float **** kerns = new_empty_4d_matrix(nkernels,kernel_order,kernel_order,nchannels);
   int i,j,k,l;
   __m128 a4,b4,c4,sum4;
   float temp[] = {0.0,0.0,0.0,0.0};
